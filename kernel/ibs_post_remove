@@ -1,0 +1,5 @@
+#!/bin/bash
+udev_install_dir="/etc/udev/rules.d"
+udev_file_source="$(dirname $0)"
+
+rm $udev_install_dir/80-ibs.rules | true

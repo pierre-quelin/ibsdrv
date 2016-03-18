@@ -1,0 +1,61 @@
+Linux driver for Phoenix Contact GmbH & Co. PCI Interbus controller boards (PCI SC/I-T)
+
+This driver is designed to provide basic services to access board from user
+space. All advanced features should be included in userspace.
+This driver must be easily adaptable to a real time system like Xenomai.
+
+System requirements :
+The driver is based on a 2.6 Kernel series
+
+------------------------------------------------------------------------------
+Basic use
+
+Compile :
+> make
+
+Load module :
+> sudo insmod ibs.ko
+
+Unload module :
+> sudo rmmod ibs
+
+Change /dev/ibs[0-3] user rights 
+> sudo cp 80-ibs.rules /etc/udev/rules.d/
+
+------------------------------------------------------------------------------
+Create a debian 7.0 dkms package :
+
+Install needed packages
+> sudo apt-get install dkms debhelper
+
+Add files
+> sudo mkdir -p /usr/src/ibs-1.00.00
+> sudo cp -r ./* /usr/src/ibs-1.00.00/
+
+Remove unwanted package files
+> rm -f  /usr/src/ibs-1.00.00/.bzr
+
+Register, build and install the module with dkms
+> sudo dkms add -m ibs -v 1.00.00
+> sudo dkms build -m ibs -v 1.00.00
+> sudo dkms install -m ibs -v 1.00.00
+
+Control
+> ls -al /lib/modules/3.2.0-4-686-pae/updates/dkms/
+
+Create the debian package
+> sudo dkms mkdsc -m ibs -v 1.00.00 --source-only
+> sudo dkms mkdeb -m ibs -v 1.00.00 --source-only
+
+Save it
+> cp /var/lib/dkms/ibs/1.00.00/deb/ibs-dkms_1.00.00_all.deb ~
+
+Unregister the module with dkms
+> sudo dkms remove -m ibs -v 1.00.00 --all
+
+Remove temporary files
+> sudo rm -rf /var/lib/dkms/ibs
+> sudo rm -rf /usr/src/ibs-1.00.00
+
+Install the package
+> sudo dpkg -i ~/ibs-dkms_1.00.00_all.deb

@@ -1,0 +1,2 @@
+# Change the user rights
+KERNEL=="ibs[0-3]", GROUP="realtime", MODE="0660"
