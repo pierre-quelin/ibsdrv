@@ -23,7 +23,7 @@ Change /dev/ibs[0-3] user rights
 > sudo cp 80-ibs.rules /etc/udev/rules.d/
 
 ------------------------------------------------------------------------------
-Create a debian 7.0 dkms package :
+Create a debian 8.0 dkms package :
 
 Install needed packages
 > sudo apt-get install dkms debhelper
@@ -33,7 +33,7 @@ Add files
 > sudo cp -r ./* /usr/src/ibs-1.00.00/
 
 Remove unwanted package files
-> rm -f  /usr/src/ibs-1.00.00/.bzr
+> rm -f  /usr/src/ibs-1.00.00/.git
 
 Register, build and install the module with dkms
 > sudo dkms add -m ibs -v 1.00.00

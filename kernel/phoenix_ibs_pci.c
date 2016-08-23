@@ -227,7 +227,7 @@ static ssize_t interbus_read(struct file* file,
    }
    else
    {
-      dprintk("BRD %d interbus_read pos:0x%04X count:%d\n", dev->minor, (unsigned int)pos, (unsigned int)count);
+      dprintk("BRD %d interbus_read pos:0x%04X count:%zu\n", dev->minor, (unsigned int)pos, count);
    }
 
    *ppos = pos + count;
@@ -286,7 +286,7 @@ static ssize_t interbus_write(struct file* file,
    }
    else
    {
-      dprintk("BRD %d interbus_write pos:0x%04X count:%d\n", dev->minor, (unsigned int)pos, (unsigned int)count);
+      dprintk("BRD %d interbus_write pos:0x%04X count:%zu\n", dev->minor, (unsigned int)pos, (unsigned int)count);
    }
 
    *ppos = pos + count;
@@ -406,8 +406,7 @@ static loff_t interbus_llseek (struct file* file,
       case INTERBUS_IOCX_IO_READ:
          if (copy_from_user(&reg, (void __user *)arg, sizeof(reg)))
             return -EFAULT;
-         if ( (reg.addr < 0) ||
-              (reg.addr >= dev->iosize) )
+         if ( reg.addr >= dev->iosize )
          {
             printk(KERN_ERR "BRD %d interbus_ioctl INTERBUS_IOCX_IO_READ 0x%04X EINVAL !\n", dev->minor, reg.addr);
 //            mutex_unlock(&file->f_dentry->d_inode->i_mutex);
@@ -422,8 +421,7 @@ static loff_t interbus_llseek (struct file* file,
       case INTERBUS_IOCS_IO_WRITE:
          if(copy_from_user(&reg, (void __user *)arg, sizeof(reg)))
             return -EFAULT;
-         if ( (reg.addr < 0) ||
-              (reg.addr >= dev->iosize) )
+         if ( reg.addr >= dev->iosize )
          {
             printk(KERN_ERR "BRD %d interbus_ioctl INTERBUS_IOCS_IO_WRITE 0x%04X EINVAL !\n", dev->minor, reg.addr);
 //            mutex_unlock(&file->f_dentry->d_inode->i_mutex);
@@ -687,7 +685,7 @@ static irqreturn_t interbus_isr(int irq,
  * @param id ID the kernel will use to associate devices to this driver.
  * @return On success zero is returned.
  **/
-static int __devinit interbus_pci_probe(struct pci_dev* pci_dev,
+static int interbus_pci_probe(struct pci_dev* pci_dev,
                                         const struct pci_device_id* id)
 {
    int err;
@@ -826,7 +824,7 @@ out_free:
  *
  * @param pci_dev The PCI device
  **/
-static void __devexit interbus_pci_remove (struct pci_dev* pci_dev)
+static void interbus_pci_remove (struct pci_dev* pci_dev)
 {
    struct interbus_dev* dev = pci_get_drvdata(pci_dev);
 

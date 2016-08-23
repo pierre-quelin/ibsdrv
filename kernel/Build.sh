@@ -36,6 +36,12 @@ echo Copy the files in /usr/src ------------------------------------------------
 sudo mkdir -p /usr/src/${_MODULE}-${_VERSION}
 sudo cp -r ./* /usr/src/${_MODULE}-${_VERSION}/
 
+# Patch template files
+sudo mkdir /usr/src/${_MODULE}-${_VERSION}/${_MODULE}-dkms-mkdeb
+sudo cp -r /etc/dkms/template-dkms-mkdeb/* /usr/src/${_MODULE}-${_VERSION}/${_MODULE}-dkms-mkdeb
+# Comment a line in the Makefile where is fix executable permissions from the entire source tree
+sudo sed -i '/chmod 644 -R "$(SRC)[/]$(NAME)-$(VERSION)"/s/^/#/' /usr/src/${_MODULE}-${_VERSION}/${_MODULE}-dkms-mkdeb/Makefile
+
 # Remove unwanted files
 echo Remove unwanted files -----------------------------------------------------
 rm -f /usr/src/${_MODULE}-${_VERSION}/.git
