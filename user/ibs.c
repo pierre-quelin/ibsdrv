@@ -76,6 +76,23 @@ typedef struct
 } IBSMHND;
 
 
+unsigned short ibsRead16 (IBSMHND* mstr, int addr)
+{
+  unsigned short data;
+
+  lseek(mstr->fd, addr, SEEK_SET);
+  read(mstr->fd, &data, sizeof(data));
+  return __be16_to_cpu(data);
+}
+
+void ibsWrite16 (IBSMHND* mstr, int addr, unsigned short data)
+{
+  data = __be16_to_cpu(data);
+  lseek(mstr->fd, addr, SEEK_SET);
+  write(mstr->fd, &data, sizeof(data));
+}
+
+
 /**
  * Open an interbus master device
  *
@@ -124,12 +141,10 @@ IBSMASTER ibsMasterOpen( const char* dev )
             break;
       }
 
-      lseek(mstr->fd, addr, SEEK_SET);
       desc = (unsigned short*)&(mstr->node[node]);
       for(offset=0 ; offset < sizeof(struct interbus_node_descriptor)/sizeof(unsigned short) ; offset++)
       {
-         read(mstr->fd, &desc[offset], sizeof(unsigned short));
-         desc[offset] = __be16_to_cpu(desc[offset]);
+         desc[offset] = ibsRead16 (mstr, addr + sizeof(unsigned short)*offset);
       }
    }
 
@@ -176,7 +191,6 @@ int ibsMasterReset( IBSMASTER master )
    IBSMHND* mstr = (IBSMHND*)master;
 
 #if defined(__linux__)
-   unsigned short data;
    INTERBUS_DEVIO_REG reg;
    int count;
 
@@ -206,17 +220,9 @@ int ibsMasterReset( IBSMASTER master )
    }
 
    /* Wait until the second node (68xxx) become ready */
-   lseek(mstr->fd, MPM_R_STATUS_REG_1, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
-   while( (data & MPM_NODE_READY_1) != MPM_NODE_READY_1 )
+   while( (ibsRead16 (mstr,MPM_R_STATUS_REG_1) & MPM_NODE_READY_1) != MPM_NODE_READY_1 )
    {
       sleep(1);
-
-      lseek(mstr->fd, MPM_R_STATUS_REG_1, SEEK_SET);
-      read(mstr->fd, &data, sizeof(data));
-      data = __be16_to_cpu(data);
-
       count++;
       if( count > 10 )
          break; // TODO
@@ -228,29 +234,16 @@ int ibsMasterReset( IBSMASTER master )
    (void)ioctl(mstr->fd, INTERBUS_IOCS_IO_WRITE, &reg);
 
    /* Erase sysfail bit */
-   data = __cpu_to_be16(MB_CLEAR_STATUS_SYSFAIL);
-   lseek(mstr->fd, MPM_W_CLEAR_STATUS_BIT_0, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr,  MPM_W_CLEAR_STATUS_BIT_0, MB_CLEAR_STATUS_SYSFAIL);
 
    /* Mark the host MPM nodes as ready (to inform the 68xxx)*/
-   data = __cpu_to_be16(MPM_NODE_READY_0);
-   lseek(mstr->fd, MPM_W_SET_MPM_NODE_READY_0, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
-   lseek(mstr->fd, MPM_W_SET_MPM_NODE_PAR_READY_0, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr,  MPM_W_SET_MPM_NODE_READY_0, MPM_NODE_READY_0);
+   ibsWrite16 (mstr, MPM_W_SET_MPM_NODE_PAR_READY_0, MPM_NODE_READY_0);
 
    /* Wait until the two nodes become ready */
-   lseek(mstr->fd, MPM_R_STATUS_REG_1, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
-   while( (data & (MPM_NODE_READY_0 | MPM_NODE_READY_1)) != (MPM_NODE_READY_0 | MPM_NODE_READY_1) )
+   while( (ibsRead16 (mstr,  MPM_R_STATUS_REG_1) & (MPM_NODE_READY_0 | MPM_NODE_READY_1)) != (MPM_NODE_READY_0 | MPM_NODE_READY_1) )
    {
       sleep(1);
-
-      lseek(mstr->fd, MPM_R_STATUS_REG_1, SEEK_SET);
-      read(mstr->fd, &data, sizeof(data));
-      data = __be16_to_cpu(data);
-
       count++;
       if( count > 10 )
          break; // TODO
@@ -260,15 +253,7 @@ int ibsMasterReset( IBSMASTER master )
     * Set the Data Cycle Activate bit so the handshake doesn't start
     * immediately after the START DATA TRANSFER command
     */
-   lseek(mstr->fd, MPM_RW_CTRL_REG, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
-
-   data |= MB_CTRL_REG_DATA_CYCLE_ACTIVATE;
-
-   data = __cpu_to_be16(data);
-   lseek(mstr->fd, MPM_RW_CTRL_REG, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr,  MPM_RW_CTRL_REG, ibsRead16 (mstr,  MPM_RW_CTRL_REG) | MB_CTRL_REG_DATA_CYCLE_ACTIVATE);
 
    /* Enable the device interrupt */
    reg.addr = IO_IRQ_CONTROL_HOST;
@@ -294,9 +279,7 @@ unsigned short ibsSysFailGet( IBSMASTER master )
    unsigned short data = 0;
 
 #if defined(__linux__)
-   lseek(mstr->fd, MPM_R_STATUS_SYSFAIL_REG, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
+   data = ibsRead16 (mstr,  MPM_R_STATUS_SYSFAIL_REG);
 #else
    (void)mstr;
 #endif
@@ -317,9 +300,7 @@ unsigned short ibsStatusGet( IBSMASTER master )
    unsigned short data = 0;
 
 #if defined(__linux__)
-   lseek(mstr->fd, MPM_RW_DIAG_REG, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
+   data = ibsRead16 (mstr, MPM_RW_DIAG_REG);
 #else
    (void)mstr;
 #endif
@@ -340,9 +321,7 @@ unsigned short ibsParamGet( IBSMASTER master )
    unsigned short data = 0;
 
 #if defined(__linux__)
-   lseek(mstr->fd, MPM_RW_DIAG_PARAM_REG, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
+   data = ibsRead16 (mstr, MPM_RW_DIAG_PARAM_REG);
 #else
    (void)mstr;
 #endif
@@ -362,31 +341,16 @@ int ibsCyclePrepare( IBSMASTER master )
    IBSMHND* mstr = (IBSMHND*)master;
 
 #if defined(__linux__)
-   unsigned short data;
 
    /* Check master status */
-   lseek(mstr->fd, MPM_RW_DIAG_REG, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
-   if( ( data & 0xE0) != 0xE0 ) /* TODO - #define */
+   if( ( ibsRead16 (mstr, MPM_RW_DIAG_REG) & 0xE0) != 0xE0 ) /* TODO - #define */
    {
       return -1;
    }
 
    /* Start cycle */
-   lseek(mstr->fd, MPM_RW_CTRL_REG, SEEK_SET);
-   read(mstr->fd, &data, sizeof(data));
-   data = __be16_to_cpu(data);
-
-   data &= ~MB_STATE_REG_DATA_CYCLE;
-
-   data = __cpu_to_be16(data);
-   lseek(mstr->fd, MPM_RW_CTRL_REG, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
-
-   data = __cpu_to_be16(0x8000); /* TODO - #define */
-   lseek(mstr->fd, MPM_W_SET_HS_A_13, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr,  MPM_RW_CTRL_REG, ibsRead16 (mstr, MPM_RW_CTRL_REG) & ~MB_STATE_REG_DATA_CYCLE);
+   ibsWrite16 (mstr, MPM_W_SET_HS_A_13, 0x8000);/* TODO - #define */
 #else
    (void)mstr;
 #endif
@@ -408,7 +372,6 @@ int ibsSendMsg( IBSMASTER master, const IBSMSG* from, int timeout )
 
 #if defined(__linux__)
    unsigned int offset, count;
-   unsigned short data;
    unsigned short* msg;
    //INTERBUS_DEVIO_REG reg;
    int result;
@@ -420,23 +383,17 @@ int ibsSendMsg( IBSMASTER master, const IBSMSG* from, int timeout )
    }
 
    /* Write the message into the MPM */
-   lseek(mstr->fd, mstr->node[0].mailbox.start, SEEK_SET);
    msg = (unsigned short*)from;
    for(offset=0 ; offset < count ; offset++)
    {
-      data = __cpu_to_be16(msg[offset]);
-      write(mstr->fd, &data, sizeof(data));
+      ibsWrite16 (mstr,  mstr->node[0].mailbox.start + offset *sizeof (unsigned short), msg[offset]);
    }
 
    /* Tell the controller about the new message and its position */
-   data = __cpu_to_be16(mstr->node[0].mailbox.start);
-   lseek(mstr->fd, mstr->node[0].svr[0][1], SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr, mstr->node[0].svr[0][1], mstr->node[0].mailbox.start);
 
    /* Send "Message present" from MPM accessor 0 to MPM accessor 1 (68xxx) */
-   data = __cpu_to_be16(0x8000); /* TODO - #define */
-   lseek(mstr->fd, MPM_W_SET_HS_A_8, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr, MPM_W_SET_HS_A_8, 0x8000);/* TODO - #define */
 
    /* Wait the ISR acknowledge */
    result = ibsIsrHandler(mstr, IBS_ISR_MSG_SND_FLAG, timeout );
@@ -470,7 +427,7 @@ int ibsReceiveMsg( IBSMASTER master, IBSMSG* to )
 #if defined(__linux__)
    unsigned int offset;
    unsigned short addr;
-   unsigned short id, nb, data;
+   unsigned short id, nb;
    unsigned short* msg;
 
 //   /* Message reception */
@@ -482,18 +439,13 @@ int ibsReceiveMsg( IBSMASTER master, IBSMSG* to )
 //   }
 
    /* get the send-vector register addresse */
-   lseek(mstr->fd, mstr->node[0].svr[1][1], SEEK_SET);
-   read(mstr->fd, &addr, sizeof(addr));
-   addr = __be16_to_cpu(addr);
+   addr = ibsRead16 (mstr,  mstr->node[0].svr[1][1]);
 
    /* read the msg id */
-   lseek(mstr->fd, addr, SEEK_SET);
-   read(mstr->fd, &id, sizeof(id));
-   id = __be16_to_cpu(id);
+   id = ibsRead16 (mstr, addr);
 
    /* read the msg size (nb x unsigned short) */
-   read(mstr->fd, &nb, sizeof(nb));
-   nb = __be16_to_cpu(nb);
+   nb = ibsRead16 (mstr, addr+2);
 
    if ( 2 + nb > (sizeof(IBSMSG)/2) )
    {
@@ -505,18 +457,12 @@ int ibsReceiveMsg( IBSMASTER master, IBSMSG* to )
    msg[1] = nb;
    for( offset = 2 ; offset < (2 + nb); offset++)
    {
-      read(mstr->fd, &msg[offset], sizeof(msg[offset]));
-      msg[offset] = __be16_to_cpu(msg[offset]);
+      msg[offset] = ibsRead16 (mstr, addr+offset *sizeof (unsigned short));
    }
 
    /* set the acknowledge vector register */
-   data = __cpu_to_be16(addr);
-   lseek(mstr->fd, mstr->node[0].avr[0][1], SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
-
-   data = __cpu_to_be16(0x8000); /* TODO - #define */
-   lseek(mstr->fd, MPM_W_SET_HS_A_12, SEEK_SET);
-   write(mstr->fd, &data, sizeof(data));
+   ibsWrite16 (mstr,  mstr->node[0].avr[0][1], addr);
+   ibsWrite16 (mstr, MPM_W_SET_HS_A_12, 0x8000); /* TODO - #define */
 #else
    (void)mstr;
 #endif
