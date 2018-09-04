@@ -570,7 +570,10 @@ static irqreturn_t interbus_isr(int irq,
    dprintk("BRD %d INTERRUPT IO_IRQ_CONTROL_HOST(0x02):0x%02X", dev->minor, data8);
    if ( (data8 & 0xF0 /*(BB_CTL_R_IRQ_MASTER1 | BB_CTL_R_IRQ_MASTER2) don't work !!! */) == 0 )
    {
-      dprintk("BRD %d INTERRUPT NOT OUT INTERRUPT !!!", dev->minor);
+      // The interrupt might be shared and thus we might see interrupts
+      // from other devices. When that happens, remove this statement.
+      // For now it helps checking the hardware. 
+      dprintk("BRD %d INTERRUPT NOT OUR INTERRUPT !!!", dev->minor);
 
       return IRQ_NONE;
    }
